@@ -18,7 +18,7 @@ A comprehensive guide for setting up a secure, self-hosted VPN server on a Raspb
 
 [![OPEN DOCUMENTATION](https://img.shields.io/badge/OPEN-Interactive%20Documentation-00FF88?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Ik0xOCAxM0g2VjEyYTIgMiAwIDAgMSAyLTJoOGMyIDAgMiAyIDIgMiAzIDAgMyAzIDMgM3YxYzAgMiAyIDIgMiAycy0yIDItMiAybS02LTJoN20tNSA4SDZWMjEiLz48cGF0aCBkPSJNNSAxMWgyIDItMiAySDVWMzJNMjMgMTFoLTJoLTVhMiAyIDAgMCAwLTIgMmgtMnoiLz48L3N2Zz4=)](https://89-oniichan.github.io/Home-Network-VPN-using-raspberry-pi-/)
 
-*(Interactive terminal, live diagrams, and enhanced navigation)*
+*(Better explanation with live diagrams, and enhanced navigation)*
 
 </div>
 
@@ -572,5 +572,6 @@ vnstat -i wg0
 **Last updated:** 2025
 
 </div>
+
 
 
