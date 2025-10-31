@@ -1,0 +1,2308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OniisPi — Home VPN (WireGuard via PiVPN) • Master Runbook</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  :root{
+    --bg:#000000;
+    --bg-secondary:#0a0a0a;
+    --panel:#111111;
+    --panel-border:#1a1a1a;
+    --text-primary:#e0e0e0;
+    --text-secondary:#a0a0a0;
+    --text-muted:#606060;
+    --accent:#00ff88;
+    --accent-dim:#00cc6a;
+    --accent-glow:rgba(0,255,136,0.3);
+    --cyan:#00d4ff;
+    --cyan-glow:rgba(0,212,255,0.3);
+    --purple:#a855f7;
+    --purple-glow:rgba(168,85,247,0.3);
+    --warning:#fbbf24;
+    --error:#ef4444;
+    --success:#10b981;
+    --code-bg:#0d0d0d;
+    --border:#222222;
+  }
+
+  *{
+    box-sizing:border-box;
+    margin:0;
+    padding:0;
+  }
+
+  html{
+    scroll-behavior:smooth;
+  }
+
+  body{
+    background:var(--bg);
+    color:var(--text-primary);
+    font:16px/1.7 'Inter',system-ui,sans-serif;
+    overflow-x:hidden;
+  }
+
+  /* Animated background with particles */
+  body::before{
+    content:'';
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(0,255,136,0.08) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(0,212,255,0.08) 0%, transparent 50%),
+      radial-gradient(circle at 50% 50%, rgba(168,85,247,0.05) 0%, transparent 50%);
+    pointer-events:none;
+    z-index:0;
+    animation:backgroundPulse 15s ease-in-out infinite;
+  }
+
+  @keyframes backgroundPulse{
+    0%, 100%{opacity:0.6}
+    50%{opacity:1}
+  }
+
+  /* Floating particles */
+  .particle{
+    position:fixed;
+    width:3px;
+    height:3px;
+    background:var(--accent);
+    border-radius:50%;
+    pointer-events:none;
+    opacity:0;
+    animation:float 20s infinite;
+    box-shadow:0 0 10px var(--accent);
+  }
+
+  @keyframes float{
+    0%{
+      transform:translateY(100vh) translateX(0) scale(0);
+      opacity:0;
+    }
+    10%{
+      opacity:0.5;
+    }
+    90%{
+      opacity:0.5;
+    }
+    100%{
+      transform:translateY(-100vh) translateX(100px) scale(1);
+      opacity:0;
+    }
+  }
+
+  .wrap{
+    max-width:1400px;
+    margin:0 auto;
+    padding:20px;
+    position:relative;
+    z-index:1;
+    padding-top:30px;
+  }
+
+  /* Terminal Header with Typewriter */
+  .terminal-header{
+    background:linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+    border:2px solid var(--border);
+    border-radius:16px;
+    padding:0;
+    margin-bottom:30px;
+    overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,255,136,0.15),
+               0 0 0 1px rgba(0,255,136,0.2),
+               inset 0 1px 0 rgba(255,255,255,0.03);
+    position:relative;
+    animation:terminalGlow 3s ease-in-out infinite;
+  }
+
+  @keyframes terminalGlow{
+    0%, 100%{
+      box-shadow:0 20px 60px rgba(0,255,136,0.15),
+                 0 0 0 1px rgba(0,255,136,0.2),
+                 inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    50%{
+      box-shadow:0 20px 60px rgba(0,212,255,0.2),
+                 0 0 0 1px rgba(0,212,255,0.3),
+                 inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+  }
+
+  .terminal-header::before{
+    content:'';
+    position:absolute;
+    top:0;
+    left:-100%;
+    width:200%;
+    height:100%;
+    background:linear-gradient(90deg,
+      transparent,
+      rgba(0,255,136,0.1),
+      transparent);
+    animation:shimmer 3s infinite;
+    pointer-events:none;
+  }
+
+  @keyframes shimmer{
+    0%{
+      left:-100%;
+    }
+    100%{
+      left:100%;
+    }
+  }
+
+  .terminal-bar{
+    background:var(--panel);
+    border-bottom:1px solid var(--border);
+    padding:12px 20px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+
+  .terminal-dot{
+    width:12px;
+    height:12px;
+    border-radius:50%;
+  }
+
+  .dot-red{background:#ef4444;}
+  .dot-yellow{background:#fbbf24;}
+  .dot-green{background:#10b981;}
+
+  .terminal-title{
+    color:var(--text-muted);
+    font-size:12px;
+    margin-left:12px;
+    font-family:'JetBrains Mono',monospace;
+  }
+
+  .terminal-content{
+    padding:30px;
+    font-family:'JetBrains Mono',monospace;
+    position:relative;
+  }
+
+  .terminal-line{
+    display:flex;
+    gap:10px;
+    margin:6px 0;
+    font-size:14px;
+  }
+
+  .terminal-prompt{
+    color:var(--accent);
+    user-select:none;
+  }
+
+  .terminal-text{
+    color:var(--text-primary);
+  }
+
+  .typewriter{
+    overflow:hidden;
+    border-right:2px solid var(--accent);
+    white-space:nowrap;
+    animation:typing 2.5s steps(50) 0.5s both, blink .75s step-end infinite;
+  }
+
+  .typewriter-2{
+    overflow:hidden;
+    white-space:nowrap;
+    opacity:0;
+    animation:typing-2 1.5s steps(40) 3s both, fadeIn 0.1s 3s forwards;
+  }
+
+  .typewriter-3{
+    overflow:hidden;
+    white-space:nowrap;
+    opacity:0;
+    animation:typing-3 1.8s steps(35) 4.5s both, fadeIn 0.1s 4.5s forwards;
+  }
+
+  .typewriter-4{
+    overflow:hidden;
+    white-space:nowrap;
+    opacity:0;
+    animation:typing-4 2s steps(45) 6.3s both, fadeIn 0.1s 6.3s forwards;
+  }
+
+  .typewriter-5{
+    overflow:hidden;
+    white-space:nowrap;
+    opacity:0;
+    animation:typing-5 1.6s steps(35) 8.3s both, fadeIn 0.1s 8.3s forwards;
+  }
+
+  .typewriter-6{
+    overflow:hidden;
+    white-space:nowrap;
+    opacity:0;
+    animation:typing-6 1.4s steps(30) 9.9s both, fadeIn 0.1s 9.9s forwards;
+  }
+
+  .typewriter-7{
+    overflow:hidden;
+    white-space:nowrap;
+    opacity:0;
+    animation:typing-7 1.8s steps(40) 11.3s both, fadeIn 0.1s 11.3s forwards;
+  }
+
+  @keyframes typing{
+    from{width:0}
+    to{width:100%}
+  }
+
+  @keyframes typing-2{
+    from{width:0}
+    to{width:100%}
+  }
+
+  @keyframes typing-3{
+    from{width:0}
+    to{width:100%}
+  }
+
+  @keyframes typing-4{
+    from{width:0}
+    to{width:100%}
+  }
+
+  @keyframes typing-5{
+    from{width:0}
+    to{width:100%}
+  }
+
+  @keyframes typing-6{
+    from{width:0}
+    to{width:100%}
+  }
+
+  @keyframes typing-7{
+    from{width:0}
+    to{width:100%}
+  }
+
+  @keyframes blink{
+    50%{border-color:transparent}
+  }
+
+  .terminal-subtitle{
+    color:var(--text-secondary);
+    margin-top:14px;
+    padding-top:14px;
+    border-top:1px solid var(--border);
+    opacity:0;
+    animation:fadeIn 1s ease 13s forwards;
+  }
+
+  @keyframes fadeIn{
+    to{opacity:1}
+  }
+
+  .chips{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:16px;
+    opacity:0;
+    animation:fadeIn 1s ease 13.5s forwards;
+  }
+
+  .terminal-success{
+    color:var(--success);
+  }
+
+  .terminal-warning{
+    color:var(--warning);
+  }
+
+  .terminal-info{
+    color:var(--cyan);
+  }
+
+  .terminal-dim{
+    color:var(--text-muted);
+  }
+
+  .chip{
+    background:rgba(0,255,136,0.1);
+    border:1px solid rgba(0,255,136,0.3);
+    color:var(--accent);
+    padding:7px 16px;
+    border-radius:6px;
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:0.3px;
+    transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor:default;
+  }
+
+  .chip:hover{
+    background:rgba(0,255,136,0.2);
+    border-color:var(--accent);
+    box-shadow:0 0 20px var(--accent-glow);
+    transform:translateY(-2px) scale(1.02);
+  }
+
+  /* GitHub Corner */
+  .github-corner{
+    position:fixed !important;
+    top:0 !important;
+    right:0 !important;
+    z-index:9999 !important;
+    width:90px;
+    height:90px;
+    overflow:visible;
+    display:block !important;
+  }
+
+  .github-corner::before{
+    content:'';
+    position:absolute;
+    top:0;
+    right:0;
+    width:90px;
+    height:90px;
+    background:linear-gradient(135deg, transparent 50%, rgba(0,255,136,0.1) 50%);
+    animation:github-glow 3s ease-in-out infinite;
+  }
+
+  @keyframes github-glow{
+    0%, 100%{
+      background:linear-gradient(135deg, transparent 50%, rgba(0,255,136,0.1) 50%);
+    }
+    50%{
+      background:linear-gradient(135deg, transparent 50%, rgba(0,212,255,0.15) 50%);
+    }
+  }
+
+  .github-corner svg{
+    fill:var(--accent);
+    color:var(--bg);
+    position:absolute;
+    top:0;
+    right:0;
+    border:0;
+    transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    filter:drop-shadow(0 0 15px rgba(0,255,136,0.5));
+    animation:github-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes github-pulse{
+    0%, 100%{
+      transform:scale(1);
+      filter:drop-shadow(0 0 15px rgba(0,255,136,0.5));
+    }
+    50%{
+      transform:scale(1.05);
+      filter:drop-shadow(0 0 25px rgba(0,255,136,0.7));
+    }
+  }
+
+  .github-corner:hover svg{
+    fill:var(--cyan);
+    filter:drop-shadow(0 0 30px rgba(0,212,255,0.8));
+    transform:scale(1.1) rotate(5deg);
+    animation:none;
+  }
+
+  .github-corner:hover .octo-arm{
+    animation:octocat-wave 560ms ease-in-out infinite;
+  }
+
+  @keyframes octocat-wave{
+    0%, 100%{transform:rotate(0)}
+    20%, 60%{transform:rotate(-25deg)}
+    40%, 80%{transform:rotate(10deg)}
+  }
+
+
+  @media (max-width: 768px){
+    .github-corner{
+      width:70px;
+      height:70px;
+    }
+    .github-corner::before{
+      width:70px;
+      height:70px;
+    }
+  }
+
+  @media (max-width: 480px){
+    .github-corner{
+      width:60px;
+      height:60px;
+    }
+    .github-corner::before{
+      width:60px;
+      height:60px;
+    }
+  }
+
+  /* Layout */
+  .layout{
+    display:grid;
+    grid-template-columns:300px 1fr;
+    gap:24px;
+    margin-top:30px;
+  }
+
+  @media (max-width: 1200px){
+    .layout{
+      grid-template-columns:260px 1fr;
+      gap:20px;
+    }
+  }
+
+  @media (max-width: 1024px){
+    .layout{
+      grid-template-columns:1fr;
+    }
+    .toc{
+      position:relative;
+      top:0;
+      max-height:none;
+      margin-bottom:24px;
+    }
+    .toc-toggle{
+      display:flex;
+    }
+    .toc h3{
+      padding-right:40px;
+    }
+  }
+
+  @media (max-width: 768px){
+    .wrap{
+      padding:12px;
+    }
+    .terminal-header{
+      border-radius:12px;
+    }
+    .card{
+      padding:20px;
+      border-radius:12px;
+    }
+    h2{
+      font-size:24px;
+    }
+    h3{
+      font-size:18px;
+    }
+  }
+
+  @media (max-width: 480px){
+    .wrap{
+      padding:12px;
+    }
+    .terminal-header{
+      border-radius:12px;
+    }
+    .terminal-content{
+      padding:24px 16px;
+      min-height:300px;
+    }
+    .terminal-line{
+      font-size:13px;
+      flex-wrap:wrap;
+      margin-bottom:8px;
+      line-height:1.6;
+    }
+    .terminal-prompt{
+      margin-bottom:6px;
+      font-size:13px;
+    }
+    .terminal-text{
+      font-size:13px;
+      line-height:1.5;
+    }
+    .terminal-subtitle{
+      font-size:13px;
+    }
+    h2{
+      font-size:20px;
+    }
+    h2::before{
+      height:20px;
+    }
+    .chip{
+      font-size:11px;
+      padding:5px 12px;
+    }
+    .badge{
+      font-size:11px;
+      padding:6px 10px;
+    }
+    .table{
+      font-size:12px;
+      display:block;
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+    }
+    .table th,
+    .table td{
+      padding:10px 12px;
+      font-size:12px;
+      min-width:100px;
+    }
+    .table thead th{
+      font-size:11px;
+    }
+  }
+
+  /* Table of Contents */
+  .toc{
+    position:sticky;
+    top:20px;
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:12px;
+    padding:20px;
+    max-height:calc(100vh - 40px);
+    overflow-y:auto;
+    box-shadow:0 10px 40px rgba(0,0,0,0.5);
+    position:relative;
+  }
+
+  /* TOC Toggle Button */
+  .toc-toggle{
+    position:absolute;
+    top:18px;
+    right:18px;
+    width:32px;
+    height:32px;
+    background:rgba(0,255,136,0.1);
+    border:1px solid rgba(0,255,136,0.3);
+    border-radius:8px;
+    cursor:pointer;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    transition:all 0.3s ease;
+    z-index:10;
+  }
+
+  .toc-toggle:hover{
+    background:rgba(0,255,136,0.2);
+    border-color:var(--accent);
+    box-shadow:0 0 15px var(--accent-glow);
+  }
+
+  .toc-toggle svg{
+    width:18px;
+    height:18px;
+    fill:var(--accent);
+    transition:transform 0.3s ease;
+  }
+
+  .toc.collapsed .toc-toggle svg{
+    transform:rotate(180deg);
+  }
+
+  .toc-content{
+    max-height:2000px;
+    transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow:hidden;
+    opacity:1;
+  }
+
+  .toc.collapsed .toc-content{
+    max-height:0 !important;
+    opacity:0;
+    margin-top:0;
+    pointer-events:none;
+  }
+
+  .toc-toggle{
+    border:none;
+    outline:none;
+  }
+
+  .toc-toggle:focus{
+    outline:2px solid var(--accent);
+    outline-offset:2px;
+  }
+
+  .toc::-webkit-scrollbar{
+    width:6px;
+  }
+
+  .toc::-webkit-scrollbar-track{
+    background:var(--bg);
+    border-radius:3px;
+  }
+
+  .toc::-webkit-scrollbar-thumb{
+    background:var(--accent);
+    border-radius:3px;
+  }
+
+  .toc h3{
+    color:var(--accent);
+    font-size:14px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    margin-bottom:16px;
+    padding-bottom:12px;
+    border-bottom:1px solid var(--border);
+    transition:all 0.3s ease;
+  }
+
+  .toc.collapsed h3{
+    margin-bottom:0;
+    padding-bottom:0;
+    border-bottom:none;
+  }
+
+  .toc a{
+    display:block;
+    color:var(--text-secondary);
+    text-decoration:none;
+    padding:10px 12px;
+    border-radius:8px;
+    font-size:13px;
+    transition:all 0.3s ease;
+    border-left:3px solid transparent;
+  }
+
+  .toc a:hover{
+    background:rgba(0,255,136,0.08);
+    color:var(--accent);
+    border-left-color:var(--accent);
+    padding-left:16px;
+  }
+
+  .toc .mini{
+    font-size:11px;
+    color:var(--text-muted);
+    margin-top:16px;
+    padding-top:12px;
+    border-top:1px solid var(--border);
+    font-style:italic;
+  }
+
+  /* Cards */
+  .card{
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:12px;
+    padding:28px;
+    margin-bottom:24px;
+    box-shadow:0 4px 24px rgba(0,0,0,0.4);
+    position:relative;
+    overflow:hidden;
+    transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin:center;
+  }
+
+  .card::before{
+    content:'';
+    position:absolute;
+    top:0;
+    left:0;
+    width:100%;
+    height:2px;
+    background:linear-gradient(90deg, var(--accent), var(--cyan), var(--purple));
+    opacity:0;
+    transition:opacity 0.3s ease;
+  }
+
+  .card:hover::before{
+    opacity:1;
+  }
+
+  .card:hover{
+    border-color:rgba(0,255,136,0.3);
+    box-shadow:0 12px 40px rgba(0,0,0,0.7),
+               0 0 0 1px rgba(0,255,136,0.2),
+               0 0 40px rgba(0,255,136,0.1);
+    transform:translateY(-4px);
+  }
+
+  h2{
+    color:var(--text-primary);
+    font-size:28px;
+    font-weight:700;
+    margin:0 0 20px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+
+  h2::before{
+    content:'';
+    width:4px;
+    height:28px;
+    background:linear-gradient(180deg, var(--accent), var(--cyan));
+    border-radius:2px;
+  }
+
+  h3{
+    color:var(--text-primary);
+    font-size:20px;
+    font-weight:600;
+    margin:24px 0 12px;
+  }
+
+  p{
+    color:var(--text-secondary);
+    margin:12px 0;
+    line-height:1.8;
+  }
+
+  ul{
+    color:var(--text-secondary);
+    margin:12px 0;
+    padding-left:24px;
+  }
+
+  li{
+    margin:8px 0;
+    line-height:1.7;
+  }
+
+  code{
+    background:var(--code-bg);
+    color:var(--accent);
+    padding:2px 8px;
+    border-radius:4px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:13px;
+    border:1px solid var(--border);
+  }
+
+  /* Code Blocks */
+  pre{
+    background:var(--code-bg);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:20px 50px 20px 20px;
+    overflow-x:auto;
+    position:relative;
+    margin:16px 0;
+    box-shadow:inset 0 2px 10px rgba(0,0,0,0.5);
+  }
+
+  pre code{
+    background:none;
+    border:none;
+    padding:0;
+    color:var(--text-primary);
+    font-size:13px;
+    line-height:1.6;
+    display:block;
+    word-wrap:normal;
+  }
+
+  .copy{
+    position:absolute !important;
+    top:10px !important;
+    right:10px !important;
+    left:auto !important;
+    background:rgba(0,255,136,0.1);
+    border:1px solid var(--accent);
+    color:var(--accent);
+    padding:7px 14px;
+    border-radius:6px;
+    font-size:11px;
+    cursor:pointer;
+    transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    z-index:10;
+    font-family:'JetBrains Mono',monospace;
+  }
+
+  .copy:hover{
+    background:var(--accent);
+    color:var(--bg);
+    box-shadow:0 0 20px var(--accent-glow);
+    transform:scale(1.08);
+  }
+
+  .copy:active{
+    transform:scale(0.95);
+  }
+
+  /* Badges */
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    background:rgba(0,212,255,0.1);
+    border:1px solid rgba(0,212,255,0.3);
+    color:var(--cyan);
+    padding:8px 14px;
+    border-radius:8px;
+    font-size:13px;
+    font-weight:500;
+    margin:6px 6px 0 0;
+    font-family:'JetBrains Mono',monospace;
+  }
+
+  /* Grid */
+  .grid2{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+    margin:16px 0;
+  }
+
+  @media (max-width: 880px){
+    .grid2{grid-template-columns:1fr}
+  }
+
+  /* Step List */
+  .step-list{
+    counter-reset:step;
+    list-style:none;
+    padding:0;
+  }
+
+  .step-list li{
+    counter-increment:step;
+    position:relative;
+    padding-left:55px;
+    margin:20px 0;
+  }
+
+  .step-list li::before{
+    content:counter(step);
+    position:absolute;
+    left:0;
+    top:0;
+    width:38px;
+    height:38px;
+    background:linear-gradient(135deg, var(--accent), var(--cyan));
+    color:var(--bg);
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:700;
+    font-size:16px;
+    box-shadow:0 4px 16px var(--accent-glow);
+  }
+
+  /* Tables */
+  .table{
+    width:100%;
+    border-collapse:separate;
+    border-spacing:0;
+    margin:16px 0;
+    font-size:14px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    overflow:hidden;
+  }
+
+  .table th,
+  .table td{
+    padding:14px 16px;
+    text-align:left;
+    border-bottom:1px solid var(--border);
+  }
+
+  .table thead th{
+    background:var(--code-bg);
+    color:var(--accent);
+    font-weight:600;
+    text-transform:uppercase;
+    font-size:12px;
+    letter-spacing:0.5px;
+  }
+
+  .table tbody tr{
+    transition:all 0.3s ease;
+  }
+
+  .table tbody tr:hover{
+    background:rgba(0,255,136,0.05);
+  }
+
+  .table tbody tr:last-child td{
+    border-bottom:none;
+  }
+
+  .table td{
+    color:var(--text-secondary);
+  }
+
+  /* Callouts */
+  .callout{
+    border-left:3px solid var(--accent);
+    background:rgba(0,255,136,0.05);
+    padding:16px 20px;
+    border-radius:8px;
+    margin:16px 0;
+    position:relative;
+    overflow:hidden;
+  }
+
+  .callout::before{
+    content:'';
+    position:absolute;
+    left:0;
+    top:0;
+    width:3px;
+    height:100%;
+    background:var(--accent);
+    box-shadow:0 0 10px var(--accent-glow);
+  }
+
+  .callout.warn{
+    border-left-color:var(--warning);
+    background:rgba(251,191,36,0.05);
+  }
+
+  .callout.warn::before{
+    background:var(--warning);
+    box-shadow:0 0 10px rgba(251,191,36,0.3);
+  }
+
+  .callout.info{
+    border-left-color:var(--cyan);
+    background:rgba(0,212,255,0.05);
+  }
+
+  .callout.info::before{
+    background:var(--cyan);
+    box-shadow:0 0 10px var(--cyan-glow);
+  }
+
+  /* Link Button */
+  .link-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    background:linear-gradient(135deg, var(--accent), var(--cyan));
+    color:var(--bg);
+    padding:12px 20px;
+    border-radius:8px;
+    text-decoration:none;
+    font-weight:600;
+    font-size:14px;
+    transition:all 0.3s ease;
+    box-shadow:0 4px 16px var(--accent-glow);
+    margin:12px 0;
+  }
+
+  .link-btn:hover{
+    transform:translateY(-2px);
+    box-shadow:0 8px 24px var(--accent-glow);
+  }
+
+  .link-btn svg{
+    width:18px;
+    height:18px;
+  }
+
+  /* SVG Diagrams */
+  .svg-card{
+    background:var(--code-bg);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    margin:20px 0;
+    box-shadow:inset 0 2px 10px rgba(0,0,0,0.5);
+  }
+
+  svg{
+    max-width:100%;
+    height:auto;
+    display:block;
+  }
+
+  .caption{
+    font-size:13px;
+    color:var(--text-muted);
+    margin-top:14px;
+    text-align:center;
+    font-style:italic;
+  }
+
+  /* Divider */
+  .hr{
+    height:1px;
+    background:linear-gradient(90deg, transparent, var(--border), transparent);
+    margin:30px 0;
+    border:none;
+  }
+
+  /* Footer */
+  footer{
+    text-align:center;
+    padding:40px 20px;
+    color:var(--text-muted);
+    font-size:13px;
+  }
+
+  footer p{
+    color:var(--text-muted);
+    margin:8px 0;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar{
+    width:10px;
+    height:10px;
+  }
+
+  ::-webkit-scrollbar-track{
+    background:var(--bg-secondary);
+  }
+
+  ::-webkit-scrollbar-thumb{
+    background:linear-gradient(180deg, var(--accent), var(--cyan));
+    border-radius:5px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover{
+    background:var(--accent);
+  }
+
+  /* Back to Top Button */
+  .back-to-top{
+    position:fixed !important;
+    bottom:30px !important;
+    right:30px !important;
+    left:auto !important;
+    width:60px;
+    height:60px;
+    background:linear-gradient(135deg, var(--accent), var(--cyan));
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    opacity:0;
+    pointer-events:none;
+    transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow:0 4px 20px var(--accent-glow),
+               0 0 0 0 rgba(0,255,136,0.4);
+    z-index:9998;
+    border:3px solid rgba(255,255,255,0.15);
+    animation:pulse-ring 2s infinite;
+  }
+
+  @keyframes pulse-ring{
+    0%{
+      box-shadow:0 4px 20px var(--accent-glow),
+                 0 0 0 0 rgba(0,255,136,0.4);
+    }
+    50%{
+      box-shadow:0 4px 20px var(--accent-glow),
+                 0 0 0 10px rgba(0,255,136,0);
+    }
+    100%{
+      box-shadow:0 4px 20px var(--accent-glow),
+                 0 0 0 0 rgba(0,255,136,0);
+    }
+  }
+
+  .back-to-top.visible{
+    opacity:1;
+    pointer-events:all;
+  }
+
+  .back-to-top:hover{
+    transform:translateY(-8px) scale(1.15);
+    box-shadow:0 12px 40px var(--accent-glow);
+    border-color:rgba(255,255,255,0.4);
+    animation:none;
+  }
+
+  .back-to-top svg{
+    width:28px;
+    height:28px;
+    fill:var(--bg);
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+  }
+
+  @media (max-width: 768px){
+    .back-to-top{
+      bottom:20px !important;
+      right:20px !important;
+      width:52px;
+      height:52px;
+    }
+    .back-to-top svg{
+      width:24px;
+      height:24px;
+    }
+  }
+
+  @media (max-width: 480px){
+    .back-to-top{
+      bottom:15px !important;
+      right:15px !important;
+      width:48px;
+      height:48px;
+    }
+  }
+
+  /* Reading Progress Bar */
+  .progress-bar{
+    position:fixed;
+    top:0;
+    left:0;
+    height:3px;
+    background:linear-gradient(90deg, var(--accent), var(--cyan), var(--purple));
+    width:0%;
+    z-index:1000;
+    transition:width 0.1s ease;
+    box-shadow:0 0 10px var(--accent-glow);
+  }
+
+  /* Scroll Indicator */
+  .scroll-indicator{
+    position:fixed;
+    top:50%;
+    left:20px;
+    right:auto;
+    transform:translateY(-50%);
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    z-index:997;
+    opacity:0;
+    transition:all 0.4s ease;
+    background:rgba(17,17,17,0.85);
+    padding:14px 8px;
+    border-radius:24px;
+    border:1px solid rgba(0,255,136,0.2);
+    backdrop-filter:blur(15px);
+    box-shadow:0 8px 32px rgba(0,0,0,0.5),
+               0 0 0 1px rgba(0,255,136,0.1);
+  }
+
+  .scroll-indicator.visible{
+    opacity:1;
+  }
+
+  .scroll-dot{
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    background:var(--border);
+    cursor:pointer;
+    transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border:2px solid transparent;
+    position:relative;
+  }
+
+  .scroll-dot::after{
+    content:'';
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -50%);
+    width:0;
+    height:0;
+    border-radius:50%;
+    background:var(--accent);
+    transition:all 0.3s ease;
+  }
+
+  .scroll-dot.active{
+    background:var(--accent);
+    box-shadow:0 0 15px var(--accent-glow);
+    transform:scale(1.5);
+    border-color:var(--accent);
+  }
+
+  .scroll-dot.active::after{
+    width:4px;
+    height:4px;
+  }
+
+  .scroll-dot:hover{
+    background:var(--cyan);
+    transform:scale(1.4);
+    border-color:var(--cyan);
+    box-shadow:0 0 12px var(--cyan-glow);
+  }
+
+  @media (max-width: 1100px){
+    .scroll-indicator{
+      display:none !important;
+    }
+  }
+
+  /* Enhanced mobile touch targets */
+  @media (max-width: 768px){
+    .scroll-indicator{
+      display:none !important;
+    }
+    pre{
+      padding:16px 45px 16px 16px;
+    }
+    .copy{
+      top:8px !important;
+      right:8px !important;
+      padding:6px 10px;
+      font-size:11px;
+    }
+  }
+
+  /* Enhanced tooltips */
+  [data-tooltip]{
+    position:relative;
+  }
+
+  [data-tooltip]:hover::after{
+    content:attr(data-tooltip);
+    position:absolute;
+    bottom:100%;
+    left:50%;
+    transform:translateX(-50%) translateY(-8px);
+    background:var(--panel);
+    color:var(--text-primary);
+    padding:8px 12px;
+    border-radius:6px;
+    font-size:12px;
+    white-space:nowrap;
+    border:1px solid var(--accent);
+    box-shadow:0 4px 16px rgba(0,0,0,0.5);
+    z-index:1001;
+    animation:tooltipFade 0.2s ease;
+  }
+
+  @keyframes tooltipFade{
+    from{
+      opacity:0;
+      transform:translateX(-50%) translateY(-4px);
+    }
+    to{
+      opacity:1;
+      transform:translateX(-50%) translateY(-8px);
+    }
+  }
+
+  /* Animations */
+  @keyframes slideIn{
+    from{
+      opacity:0;
+      transform:translateY(30px);
+    }
+    to{
+      opacity:1;
+      transform:translateY(0);
+    }
+  }
+
+  .card{
+    animation:slideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation-play-state:paused;
+  }
+
+  /* Code block enhanced */
+  pre:hover{
+    border-color:var(--accent);
+    box-shadow:inset 0 2px 10px rgba(0,0,0,0.5),
+               0 0 20px rgba(0,255,136,0.1);
+  }
+
+  /* Link hover effect */
+  a{
+    position:relative;
+  }
+
+  a:not(.link-btn):not(.github-corner):not(.toc a)::after{
+    content:'';
+    position:absolute;
+    bottom:-2px;
+    left:0;
+    width:0;
+    height:1px;
+    background:var(--accent);
+    transition:width 0.3s ease;
+  }
+
+  a:not(.link-btn):not(.github-corner):not(.toc a):hover::after{
+    width:100%;
+  }
+</style>
+</head>
+<body>
+<!-- Reading Progress Bar -->
+<div class="progress-bar" id="progressBar"></div>
+
+<!-- Scroll Indicator -->
+<div class="scroll-indicator" id="scrollIndicator"></div>
+
+<!-- GitHub Corner -->
+<a href="https://github.com/89-oniichan/Home-Network-VPN-using-raspberry-pi-.git" target="_blank" class="github-corner" aria-label="Star on GitHub">
+  <svg width="90" height="90" viewBox="0 0 250 250" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
+    <path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path>
+    <path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path>
+  </svg>
+</a>
+
+<div class="wrap">
+  <!-- Terminal Header with Typewriter Effect -->
+  <div class="terminal-header">
+    <div class="terminal-bar">
+      <div class="terminal-dot dot-red"></div>
+      <div class="terminal-dot dot-yellow"></div>
+      <div class="terminal-dot dot-green"></div>
+      <span class="terminal-title">onii@raspberrypi ~ master runbook</span>
+    </div>
+    <div class="terminal-content">
+      <div class="terminal-line">
+        <span class="terminal-prompt">root@onii:~$</span>
+        <span class="terminal-text typewriter">./setup-wireguard-vpn --mode=production --interface=wg0</span>
+      </div>
+      <div class="terminal-line">
+        <span class="terminal-text typewriter-2 terminal-success">✓ Checking prerequisites... OK</span>
+      </div>
+      <div class="terminal-line">
+        <span class="terminal-text typewriter-3 terminal-success">✓ Initializing WireGuard interface... OK</span>
+      </div>
+      <div class="terminal-line">
+        <span class="terminal-text typewriter-4 terminal-info">→ Configuring NAT & iptables forwarding rules...</span>
+      </div>
+      <div class="terminal-line">
+        <span class="terminal-text typewriter-5 terminal-success">✓ NAT configured on wlan0</span>
+      </div>
+      <div class="terminal-line">
+        <span class="terminal-text typewriter-6 terminal-success">✓ Firewall rules applied</span>
+      </div>
+      <div class="terminal-line">
+        <span class="terminal-text typewriter-7 terminal-dim">Server: 10.155.159.1 | Port: 51820/UDP | Encryption: ChaCha20-Poly1305</span>
+      </div>
+      <div class="terminal-subtitle">
+        <p style="margin:8px 0 4px;color:var(--text-secondary);font-weight:600;font-size:15px">Documentation</p>
+      </div>
+      <div class="chips">
+        <span class="chip">Raspberry Pi 5</span>
+        <span class="chip">WireGuard</span>
+        <span class="chip">LAN Access</span>
+        <span class="chip">NAT & Forwarding</span>
+        <span class="chip">RDP/SSH Ready</span>
+        <span class="chip">ChaCha20-Poly1305</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- Table of Contents -->
+    <nav class="toc">
+      <h3>Navigation</h3>
+      <button class="toc-toggle" aria-label="Toggle navigation">
+        <svg viewBox="0 0 24 24">
+          <path d="M7 10l5 5 5-5z"/>
+        </svg>
+      </button>
+      <div class="toc-content">
+        <a href="#overview">1. Overview</a>
+        <a href="#pros-cons">2. Pros & Cons</a>
+        <a href="#topology">3. Network Topology</a>
+        <a href="#phase1">4. Phase 1: Install Pi OS</a>
+        <a href="#phase2">5. Phase 2: Install PiVPN</a>
+        <a href="#phase3">6. Phase 3: Create Profiles</a>
+        <a href="#router">7. Phase 4: Port Forwarding</a>
+        <a href="#server">8. Phase 5: Server Config</a>
+        <a href="#clients">9. Phase 6: Client Setup</a>
+        <a href="#forwarding">10. Phase 7: NAT & Routing</a>
+        <a href="#verify">11. Phase 8: Verify & Test</a>
+        <a href="#routing-modes">12. AllowedIPs Explained</a>
+        <a href="#troubleshoot">13. Troubleshooting</a>
+        <a href="#ops">14. Operations & Tips</a>
+        <div class="mini">Bookmark this runbook for future reference</div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main>
+      <!-- Section 1: Overview -->
+      <section id="overview" class="card">
+        <h2>Overview</h2>
+        <p>We built a <strong>remote-access VPN</strong> so your phone, PC, and any systems can reach any <code>192.168.1.x</code> device at home from anywhere. The Raspberry Pi terminates WireGuard on <code>wg0</code>, then forwards traffic to your home LAN via <code>wlan0</code> with NAT masquerading. Each client receives unique cryptographic keys and a dedicated VPN IP.</p>
+        <div style="margin-top:16px">
+          <span class="badge">Server LAN: 192.168.1.XX</span>
+          <span class="badge">Server VPN: 10.155.159.1</span>
+          <span class="badge">Phone: 10.155.159.X</span>
+          <span class="badge">PC: 10.155.159.X</span>
+          <span class="badge">UDP Port: 51820</span>
+        </div>
+      </section>
+
+      <!-- Section 2: Pros & Cons -->
+      <section id="pros-cons" class="card">
+        <h2>Pros & Cons</h2>
+        <div class="grid2">
+          <div>
+            <h3 style="color:var(--success)">✓ Advantages</h3>
+            <ul>
+              <li><strong>Minimal latency</strong> — WireGuard is significantly faster than OpenVPN</li>
+              <li><strong>Simple configuration</strong> — PiVPN automates most setup steps</li>
+              <li><strong>End-to-end encrypted</strong> — Modern cryptography (ChaCha20, Poly1305)</li>
+              <li><strong>Low maintenance</strong> — Runs as a systemd service with auto-restart</li>
+              <li><strong>Cross-platform</strong> — Works on iOS, Android, Windows, macOS, Linux</li>
+            </ul>
+          </div>
+          <div>
+            <h3 style="color:var(--warning)">⚠ Considerations</h3>
+            <ul>
+              <li><strong>Port forwarding required</strong> — Some ISPs block or restrict this</li>
+              <li><strong>Uptime dependency</strong> — Must maintain stable power and internet</li>
+              <li><strong>Single point of failure</strong> — If Pi goes down, VPN is unavailable</li>
+              <li><strong>Dynamic IP challenges</strong> — May need DDNS for changing IPs</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Network Topology -->
+      <section id="topology" class="card">
+        <h2>Network Topology Diagram</h2>
+        <div class="svg-card">
+          <svg viewBox="0 0 1000 500" role="img" aria-label="Network Topology">
+            <defs>
+              <style>
+                .node{fill:#0d0d0d;stroke:#00ff88;stroke-width:2}
+                .node-label{fill:#e0e0e0;font:14px 'JetBrains Mono',monospace;font-weight:600}
+                .node-sublabel{fill:#a0a0a0;font:11px 'JetBrains Mono',monospace}
+                .connection{stroke:#00d4ff;stroke-width:3;stroke-dasharray:5,5;opacity:0.6}
+                .connection-solid{stroke:#00ff88;stroke-width:3}
+                .arrow{fill:#00ff88}
+                .highlight{fill:#00ff88;opacity:0.1}
+              </style>
+              <marker id="arrowhead" markerWidth="12" markerHeight="12" refX="10" refY="4" orient="auto">
+                <path d="M0,0 L10,4 L0,8 Z" class="arrow"/>
+              </marker>
+            </defs>
+
+            <!-- Internet Cloud -->
+            <ellipse cx="160" cy="80" rx="120" ry="60" class="node"/>
+            <text x="160" y="75" text-anchor="middle" class="node-label">Internet</text>
+            <text x="160" y="92" text-anchor="middle" class="node-sublabel">Public IP: ***.***.***.***</text>
+
+            <!-- Home Router -->
+            <rect x="340" y="40" width="220" height="80" rx="10" class="node"/>
+            <text x="450" y="70" text-anchor="middle" class="node-label">Home Router (NAT)</text>
+            <text x="450" y="90" text-anchor="middle" class="node-sublabel">Port Forward: 51820/UDP</text>
+            <text x="450" y="105" text-anchor="middle" class="node-sublabel">→ 192.168.1.***</text>
+
+            <!-- Raspberry Pi Server -->
+            <rect x="620" y="20" width="340" height="140" rx="12" class="highlight"/>
+            <rect x="625" y="25" width="330" height="130" rx="10" class="node"/>
+            <text x="790" y="55" text-anchor="middle" class="node-label">Raspberry Pi 5 — WireGuard Server</text>
+            <text x="790" y="75" text-anchor="middle" class="node-sublabel">LAN Interface: 192.168.1.*** (wlan0)</text>
+            <text x="790" y="92" text-anchor="middle" class="node-sublabel">VPN Interface: 10.155.159.1 (wg0)</text>
+            <text x="790" y="109" text-anchor="middle" class="node-sublabel">NAT: iptables MASQUERADE on wlan0</text>
+            <text x="790" y="126" text-anchor="middle" class="node-sublabel">Encryption: ChaCha20-Poly1305</text>
+
+            <!-- LAN Devices -->
+            <rect x="620" y="230" width="340" height="100" rx="10" class="node"/>
+            <text x="790" y="265" text-anchor="middle" class="node-label">Home LAN Devices</text>
+            <text x="790" y="285" text-anchor="middle" class="node-sublabel">Desktop PC • NAS • Smart Home IoT</text>
+            <text x="790" y="305" text-anchor="middle" class="node-sublabel">Network: 192.168.1.0/24</text>
+
+            <!-- VPN Clients -->
+            <rect x="40" y="280" width="280" height="140" rx="12" class="node"/>
+            <text x="180" y="315" text-anchor="middle" class="node-label">Remote VPN Clients</text>
+            <text x="180" y="340" text-anchor="middle" class="node-sublabel"> Mobile Phone → 10.155.159.2</text>
+            <text x="180" y="360" text-anchor="middle" class="node-sublabel"> Windows PC → 10.155.159.3</text>
+            <text x="180" y="380" text-anchor="middle" class="node-sublabel"> MacBook → 10.155.159.4</text>
+            <text x="180" y="400" text-anchor="middle" class="node-sublabel">Endpoint: ***.***.***.***:51820</text>
+
+            <!-- Connections -->
+            <line x1="280" y1="80" x2="340" y2="80" class="connection-solid" marker-end="url(#arrowhead)"/>
+            <line x1="560" y1="80" x2="625" y2="80" class="connection-solid" marker-end="url(#arrowhead)"/>
+            <line x1="790" y1="165" x2="790" y2="230" class="connection-solid" marker-end="url(#arrowhead)"/>
+            <line x1="320" y1="350" x2="625" y2="90" class="connection" marker-end="url(#arrowhead)"/>
+
+            <!-- Labels on connections -->
+            <text x="310" y="65" class="node-sublabel">HTTPS</text>
+            <text x="580" y="65" class="node-sublabel">UDP:51820</text>
+            <text x="800" y="200" class="node-sublabel">Forwarding</text>
+            <text x="450" y="200" class="node-sublabel">Encrypted Tunnel</text>
+          </svg>
+          <p class="caption">Client devices connect to your public IP on UDP 51820 → Router forwards to Pi → Pi decrypts on wg0 interface → Forwards to LAN via wlan0 using iptables NAT masquerading</p>
+        </div>
+      </section>
+
+      <!-- Section 4: Phase 1 - Install Pi OS -->
+      <section id="phase1" class="card">
+        <h2>Phase 1: Install Raspberry Pi OS</h2>
+        <p>Start by flashing Raspberry Pi OS to your microSD card using the official imaging tool.</p>
+
+        <ol class="step-list">
+          <li>
+            <strong>Download Raspberry Pi Imager</strong><br>
+            On your PC, install <strong>Raspberry Pi Imager</strong> from <a href="https://www.raspberrypi.com/software" target="_blank" style="color:var(--accent)">raspberrypi.com/software</a>
+          </li>
+          <li>
+            <strong>Choose your configuration</strong>
+            <ul style="margin-top:10px">
+              <li><strong>Device:</strong> Raspberry Pi 5 (or your model)</li>
+              <li><strong>OS:</strong> "Raspberry Pi OS (Lite 64-bit)" — desktop is optional</li>
+              <li><strong>Storage:</strong> Your microSD card</li>
+            </ul>
+          </li>
+          <li>
+            <strong>Configure advanced settings (⚙️ gear icon)</strong>
+            <ul style="margin-top:10px">
+              <li>Set username = <code>pivpn</code></li>
+              <li>Set secure password (e.g., <code>mypi123</code>)</li>
+              <li>Enable SSH with password authentication</li>
+              <li>Configure Wi-Fi credentials or use Ethernet</li>
+            </ul>
+          </li>
+          <li>
+            <strong>Write, eject, and boot</strong><br>
+            Write the image → Safely eject the card → Insert into Pi → Power it up
+          </li>
+          <li>
+            <strong>Connect via SSH</strong><br>
+            From your PC on the same network:
+            <pre><button class="copy">Copy</button><code>ssh pivpn@192.168.1.x</code></pre>
+            <small style="color:var(--text-muted)">Replace <code>192.168.1.x</code> with your Pi's actual IP (check your router's DHCP list)</small>
+          </li>
+          <li>
+            <strong>Update the system</strong>
+            <pre><button class="copy">Copy</button><code>sudo apt update && sudo apt full-upgrade -y
+sudo reboot</code></pre>
+          </li>
+        </ol>
+      </section>
+
+      <!-- Section 5: Phase 2 - Install PiVPN -->
+      <section id="phase2" class="card">
+        <h2>Phase 2: Install WireGuard VPN (via PiVPN)</h2>
+        <p>PiVPN is a convenient installer that automates WireGuard setup, profile generation, and firewall rules.</p>
+
+        <h3>Run the installer</h3>
+        <pre><button class="copy">Copy</button><code>curl -L https://install.pivpn.io | bash</code></pre>
+
+        <h3>Installation prompts</h3>
+        <table class="table">
+          <thead>
+            <tr><th>Step</th><th>What to Choose</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>VPN Type</td><td><strong>WireGuard</strong></td></tr>
+            <tr><td>Static IP</td><td>Auto-detect or set manually (e.g., <code>192.168.1.89</code>)</td></tr>
+            <tr><td>Port</td><td>Default <code>51820</code> (UDP)</td></tr>
+            <tr><td>DNS Provider</td><td><strong>Cloudflare</strong> (1.1.1.1) or <strong>Quad9</strong> (9.9.9.9)</td></tr>
+            <tr><td>Unattended Upgrades</td><td>✅ Enable (recommended for security patches)</td></tr>
+          </tbody>
+        </table>
+
+        <p style="margin-top:20px">After installation completes:</p>
+        <pre><button class="copy">Copy</button><code>sudo reboot</code></pre>
+      </section>
+
+      <!-- Section 6: Phase 3 - Create Profiles -->
+      <section id="phase3" class="card">
+        <h2>Phase 3: Create Your VPN Profiles</h2>
+        <p>After the Pi reboots, create individual profiles for each device that will connect to your VPN.</p>
+
+        <h3>Add a new client</h3>
+        <pre><button class="copy">Copy</button><code>pivpn add</code></pre>
+        <p>Give it a simple name (e.g., <code>phone</code> or <code>laptop</code>). PiVPN generates the config file at:</p>
+        <pre><button class="copy">Copy</button><code>/home/pivpn/configs/phone.conf</code></pre>
+
+        <h3>Display QR code for mobile setup</h3>
+        <pre><button class="copy">Copy</button><code>pivpn -qr</code></pre>
+        <p>Scan this QR code with the WireGuard mobile app (iOS/Android) to import the profile instantly.</p>
+
+        <div class="callout info">
+          <strong> Pro Tip:</strong> Create separate profiles for each device to maintain individual key pairs and enable granular revocation if a device is lost or compromised.
+        </div>
+      </section>
+
+      <!-- Section 7: Phase 4 - Port Forwarding -->
+      <section id="router" class="card">
+        <h2>Phase 4: Router Port Forwarding</h2>
+        <p><strong>Why?</strong> You must allow VPN traffic from the internet to reach your Pi. Without port forwarding, external clients cannot establish a connection.</p>
+
+        <ol class="step-list">
+          <li>Log into your home router (typically <code>192.168.1.1</code> or <code>192.168.0.1</code> in a browser)</li>
+          <li>Find the <strong>Port Forwarding</strong>, <strong>Virtual Server</strong>, or <strong>NAT</strong> section</li>
+          <li>Add a new forwarding rule with the following configuration:</li>
+        </ol>
+
+        <table class="table">
+          <thead>
+            <tr><th>Field</th><th>Value</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Name / Service</td><td>WireGuard</td><td>Easy label for identification</td></tr>
+            <tr><td>Protocol</td><td><strong>UDP</strong></td><td>WireGuard uses UDP exclusively</td></tr>
+            <tr><td>WAN Start Port</td><td><code>51820</code></td><td>External port for incoming connections</td></tr>
+            <tr><td>WAN End Port</td><td><code>51820</code></td><td>Same as start port</td></tr>
+            <tr><td>LAN Host IP</td><td><code>192.168.1.***</code></td><td>Your Pi's static IP (masked for security)</td></tr>
+            <tr><td>LAN Host Port</td><td><code>51820</code></td><td>Same as WAN port</td></tr>
+          </tbody>
+        </table>
+
+        <p style="margin-top:20px"><strong>After saving the rule:</strong></p>
+        <pre><button class="copy">Copy</button><code>REBOOT THE ROUTER</code></pre>
+
+        <div class="callout warn">
+          <strong>⚠ Security Warning:</strong> Only expose UDP 51820. Never forward SSH (22), RDP (3389), or other services directly to the internet — access them securely through the VPN tunnel instead.
+        </div>
+      </section>
+
+      <!-- Section 8: Phase 5 - Server Config -->
+      <section id="server" class="card">
+        <h2>Phase 5: Server Config (<code>/etc/wireguard/wg0.conf</code>)</h2>
+        <p>This file is <em>auto-generated</em> by PiVPN when you add clients. Here's what a typical configuration looks like:</p>
+
+        <pre><button class="copy">Copy</button><code>[Interface]
+PrivateKey = &lt;SERVER_PRIVATE_KEY&gt;
+Address = 10.155.159.1/24
+ListenPort = 51820
+MTU = 1420
+
+# Phone (10.155.159.2)
+[Peer]
+PublicKey = &lt;MOBILE_PUBLIC_KEY&gt;
+PresharedKey = &lt;PSK&gt;
+AllowedIPs = 10.155.159.2/32
+
+# PC (10.155.159.3)
+[Peer]
+PublicKey = &lt;PC_PUBLIC_KEY&gt;
+PresharedKey = &lt;PSK&gt;
+AllowedIPs = 10.155.159.3/32</code></pre>
+
+        <div class="callout warn">
+          <strong>⚠ Critical:</strong> Make sure you <strong>do NOT</strong> include <code>192.168.1.0/24</code> in the server's <code>AllowedIPs</code> field. The server config defines which IPs <em>belong to each peer</em>, not which destinations they can reach. Adding your LAN range here will break routing.
+        </div>
+
+        <p style="margin-top:12px"><span class="badge">Auto-generated by <code>pivpn add</code> command</span></p>
+      </section>
+
+      <!-- Section 9: Phase 6 - Client Setup -->
+      <section id="clients" class="card">
+        <h2>Phase 6: Client Configuration</h2>
+        <p>Each client needs a profile that tells WireGuard how to connect and what traffic to route through the tunnel.</p>
+
+        <div class="grid2">
+          <div>
+            <h3> Mobile Client (Phone)</h3>
+            <p>PiVPN generates this automatically. Use <code>pivpn -qr</code> to scan the QR code or manually transfer the <code>.conf</code> file.</p>
+            <pre><button class="copy">Copy</button><code>[Interface]
+PrivateKey = &lt;MOBILE_PRIVATE_KEY&gt;
+Address = 10.155.159.2/24
+DNS = 9.9.9.9, 149.112.112.112
+
+[Peer]
+PublicKey = &lt;SERVER_PUBLIC_KEY&gt;
+PresharedKey = &lt;PSK&gt;
+Endpoint = &lt;YOUR_PUBLIC_IP&gt;:51820
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25</code></pre>
+          </div>
+
+          <div>
+            <h3> Windows PC Client</h3>
+            <p>Download <a href="https://www.wireguard.com/install/" target="_blank" style="color:var(--accent)">WireGuard for Windows</a> and import this config: Use <code> pivpn add</code> to create the profile.
+            </p>
+            <p></p>
+            <pre><button class="copy">Copy</button><code>[Interface]
+PrivateKey = &lt;PC_PRIVATE_KEY&gt;
+Address = 10.155.159.3/24
+DNS = 9.9.9.9, 149.112.112.112
+
+[Peer]
+PublicKey = &lt;SERVER_PUBLIC_KEY&gt;
+PresharedKey = &lt;PSK&gt;
+Endpoint = &lt;YOUR_PUBLIC_IP&gt;:51820
+AllowedIPs = 0.0.0.0/0, ::/0, 192.168.1.0/24
+PersistentKeepalive = 25</code></pre>
+          </div>
+        </div>
+
+        <div class="callout info" style="margin-top:20px">
+          <strong> Why the difference?</strong> Adding <code>192.168.1.0/24</code> to the PC's <code>AllowedIPs</code> ensures proper LAN discovery for apps like Remote Desktop, SMB shares, and network printers. Mobile clients often work without this because their VPN stack automatically routes LAN subnets under <code>0.0.0.0/0</code>.
+          <br><br>
+          <a href="#routing-modes" class="link-btn">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Read detailed explanation of AllowedIPs & routing modes
+          </a>
+        </div>
+      </section>
+
+      <!-- Section 10: Phase 7 - NAT & Forwarding -->
+      <section id="forwarding" class="card">
+        <h2>Phase 7: IP Forwarding & NAT Rules</h2>
+        <p>These settings allow your Pi to act as a router, forwarding VPN traffic to your LAN and back.</p>
+
+        <h3>Enable IP Forwarding</h3>
+        <pre><button class="copy">Copy</button><code>sudo nano /etc/sysctl.conf</code></pre>
+        <p>Ensure these lines are present and <strong>uncommented</strong> (remove the <code>#</code> if present):</p>
+        <pre><button class="copy">Copy</button><code>net.ipv4.ip_forward=1
+net.ipv6.conf.all.forwarding=1</code></pre>
+        <p>Save the file (<kbd>Ctrl+O</kbd>, <kbd>Enter</kbd>, <kbd>Ctrl+X</kbd>) and apply the changes:</p>
+        <pre><button class="copy">Copy</button><code>sudo sysctl -p</code></pre>
+
+        <h3>Configure NAT & Traffic Forwarding</h3>
+        <p>These iptables rules allow bidirectional traffic between <code>wg0</code> (VPN interface) and <code>wlan0</code> (Wi-Fi interface). If your Pi uses Ethernet, replace <code>wlan0</code> with <code>eth0</code>.</p>
+
+        <div class="grid2" style="margin-top:16px">
+          <div>
+            <h3>For Wi-Fi (<code>wlan0</code>)</h3>
+            <pre><button class="copy">Copy</button><code>sudo iptables -A FORWARD -i wg0 -j ACCEPT
+sudo iptables -A FORWARD -o wg0 -j ACCEPT
+sudo iptables -t nat -A POSTROUTING -o wlan0 -j MASQUERADE</code></pre>
+          </div>
+          <div>
+            <h3>For Ethernet (<code>eth0</code>)</h3>
+            <pre><button class="copy">Copy</button><code>sudo iptables -A FORWARD -i wg0 -j ACCEPT
+sudo iptables -A FORWARD -o wg0 -j ACCEPT
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE</code></pre>
+          </div>
+        </div>
+
+        <p style="margin-top:20px">Verify your interface name:</p>
+        <pre><button class="copy">Copy</button><code>ip a</code></pre>
+
+        <h3>Make Rules Persistent</h3>
+        <pre><button class="copy">Copy</button><code>sudo apt install iptables-persistent -y
+sudo netfilter-persistent save</code></pre>
+
+        <h3>Restart WireGuard</h3>
+        <pre><button class="copy">Copy</button><code>sudo systemctl restart wg-quick@wg0</code></pre>
+      </section>
+
+      <!-- Section 11: Phase 8 - Verify & Test -->
+      <section id="verify" class="card">
+        <h2>Phase 8: Verify & Test</h2>
+
+        <div class="grid2">
+          <div>
+            <h3>On the Raspberry Pi</h3>
+            <pre><button class="copy">Copy</button><code>sudo wg</code></pre>
+            <p>Look for recent handshakes and non-zero transfer counters:</p>
+            <pre><button class="copy">Copy</button><code>interface: wg0
+  peer: &lt;PC_PUBLIC_KEY&gt;
+    endpoint: ***.***.***.***:xxxxx
+    allowed ips: 10.155.159.3/32
+    latest handshake: 12 seconds ago
+    transfer: 2.51 KiB received, 1.83 KiB sent</code></pre>
+
+            <p style="margin-top:12px">Check both IP addresses are assigned:</p>
+            <pre><button class="copy">Copy</button><code>hostname -I</code></pre>
+            <p>Should show: <code>192.168.1.*** 10.155.159.1</code></p>
+          </div>
+
+          <div>
+            <h3>From a VPN Client</h3>
+            <pre><button class="copy">Copy</button><code>ping 10.155.159.1</code></pre>
+            <p>Tests connectivity to the Pi via VPN tunnel.</p>
+
+            <pre style="margin-top:12px"><button class="copy">Copy</button><code>ping 192.168.1.***</code></pre>
+            <p>Tests LAN IP accessibility through tunnel.</p>
+
+            <pre style="margin-top:12px"><button class="copy">Copy</button><code>curl ifconfig.me</code></pre>
+            <p>Should return your home's public IP (confirms full-tunnel routing).</p>
+          </div>
+        </div>
+
+        <div class="callout info" style="margin-top:24px">
+          <h3 style="margin:0 0 10px;color:var(--cyan)">Optional: Static Route for True LAN Visibility</h3>
+          <p>If you want devices on your home LAN to <em>directly</em> see and initiate connections to VPN clients (e.g., ping <code>10.155.159.2</code> from a LAN PC), add a static route in your router:</p>
+          <ul style="margin:12px 0">
+            <li><strong>Destination:</strong> <code>10.155.159.0</code></li>
+            <li><strong>Subnet mask:</strong> <code>255.255.255.0</code></li>
+            <li><strong>Gateway:</strong> <code>192.168.1.***</code> (your Pi's IP)</li>
+          </ul>
+          <p>Look for this in your router's <strong>Advanced → Static Routing</strong> section.</p>
+        </div>
+      </section>
+
+      <!-- Section 12: AllowedIPs Explained -->
+      <section id="routing-modes" class="card">
+        <h2>AllowedIPs & Routing Modes Explained</h2>
+        <p>WireGuard decides which traffic goes through the VPN using the <code>AllowedIPs</code> field in your client config. Understanding this setting is crucial for proper operation.</p>
+
+        <h3>Full-Tunnel Mode (<code>AllowedIPs = 0.0.0.0/0, ::/0</code>)</h3>
+        <p>All network traffic — internet <em>and</em> LAN — is sent through the VPN tunnel to your Raspberry Pi. This provides complete encryption and makes your device appear to browse from your home IP.</p>
+
+        <div class="svg-card">
+          <svg viewBox="0 0 1000 320">
+            <defs>
+              <style>
+                .ft-box{fill:#0d0d0d;stroke:#00ff88;stroke-width:2;rx:10}
+                .ft-text{fill:#e0e0e0;font:13px 'JetBrains Mono',monospace}
+                .ft-label{fill:#a0a0a0;font:11px 'JetBrains Mono',monospace}
+                .ft-arrow{stroke:#00d4ff;stroke-width:3;marker-end:url(#ft-head)}
+              </style>
+              <marker id="ft-head" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 Z" fill="#00d4ff"/>
+              </marker>
+            </defs>
+
+            <rect x="50" y="120" width="200" height="80" class="ft-box"/>
+            <text x="150" y="155" text-anchor="middle" class="ft-text">Your Device</text>
+            <text x="150" y="175" text-anchor="middle" class="ft-label">10.155.159.2</text>
+
+            <line x1="250" y1="160" x2="380" y2="160" class="ft-arrow"/>
+            <text x="315" y="145" text-anchor="middle" class="ft-label">All Traffic</text>
+
+            <rect x="380" y="100" width="240" height="120" class="ft-box"/>
+            <text x="500" y="145" text-anchor="middle" class="ft-text">WireGuard Tunnel</text>
+            <text x="500" y="165" text-anchor="middle" class="ft-label">Encrypted (wg0)</text>
+            <text x="500" y="185" text-anchor="middle" class="ft-label">Internet + LAN Traffic</text>
+
+            <line x1="620" y1="160" x2="750" y2="160" class="ft-arrow"/>
+
+            <rect x="750" y="120" width="200" height="80" class="ft-box"/>
+            <text x="850" y="155" text-anchor="middle" class="ft-text">Pi VPN Server</text>
+            <text x="850" y="175" text-anchor="middle" class="ft-label">NAT → wlan0</text>
+          </svg>
+          <p class="caption">Full-tunnel: All traffic (internet + LAN) routes through VPN; Pi forwards via wlan0 using NAT.</p>
+        </div>
+
+        <div class="grid2">
+          <div>
+            <h3 style="color:var(--success)">✓ Advantages</h3>
+            <ul>
+              <li>Maximum security and privacy</li>
+              <li>Your IP appears as your home network</li>
+              <li>Protects all traffic on untrusted networks</li>
+              <li>Bypasses geographic restrictions</li>
+            </ul>
+          </div>
+          <div>
+            <h3 style="color:var(--warning)">⚠ Trade-offs</h3>
+            <ul>
+              <li>Higher latency for all internet traffic</li>
+              <li>Full dependency on Pi uptime</li>
+              <li>Uses more home bandwidth</li>
+              <li>May be slower on mobile data</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <h3>Split-Tunnel with LAN (<code>AllowedIPs = 0.0.0.0/0, ::/0, 192.168.1.0/24</code>)</h3>
+        <p>This hybrid mode routes all traffic through the VPN (like full-tunnel) <em>but</em> explicitly includes the home LAN subnet. On Windows, adding <code>192.168.1.0/24</code> ensures proper routing table priority for LAN services.</p>
+
+        <div class="svg-card">
+          <svg viewBox="0 0 1000 320">
+            <rect x="50" y="120" width="200" height="80" class="ft-box"/>
+            <text x="150" y="155" text-anchor="middle" class="ft-text">Your Device</text>
+            <text x="150" y="175" text-anchor="middle" class="ft-label">10.155.159.3</text>
+
+            <line x1="250" y1="160" x2="380" y2="160" class="ft-arrow"/>
+            <text x="315" y="145" text-anchor="middle" class="ft-label">VPN + LAN</text>
+
+            <rect x="380" y="100" width="240" height="120" class="ft-box"/>
+            <text x="500" y="145" text-anchor="middle" class="ft-text">WireGuard Tunnel</text>
+            <text x="500" y="165" text-anchor="middle" class="ft-label">Hybrid Routing</text>
+            <text x="500" y="185" text-anchor="middle" class="ft-label">Internet + LAN Combined</text>
+
+            <line x1="620" y1="160" x2="750" y2="160" class="ft-arrow"/>
+
+            <rect x="750" y="120" width="200" height="80" class="ft-box"/>
+            <text x="850" y="155" text-anchor="middle" class="ft-text">Pi + LAN Access</text>
+            <text x="850" y="175" text-anchor="middle" class="ft-label">Privacy + Devices</text>
+          </svg>
+          <p class="caption">Split-tunnel: Internet and home LAN both route through Pi, allowing privacy + remote device access.</p>
+        </div>
+
+        <div class="callout info">
+          <strong>📱 Why mobile works without <code>192.168.1.0/24</code>:</strong><br>
+          Mobile OS implementations (Android/iOS WireGuard apps) automatically route all traffic matching <code>0.0.0.0/0</code>, which includes LAN subnets as a subset. Windows maintains separate routing tables and requires explicit inclusion of the LAN range to avoid conflicts with its physical network adapter.
+        </div>
+
+        <div class="grid2" style="margin-top:20px">
+          <div>
+            <h3 style="color:var(--success)">✓ Advantages</h3>
+            <ul>
+              <li>Complete LAN device access (RDP, SMB, printers)</li>
+              <li>Still encrypted and secure</li>
+              <li>Works around Windows routing quirks</li>
+              <li>Network discovery enabled</li>
+            </ul>
+          </div>
+          <div>
+            <h3 style="color:var(--warning)">⚠ Trade-offs</h3>
+            <ul>
+              <li>Can cause routing conflicts if misconfigured</li>
+              <li>Slightly more complex troubleshooting</li>
+              <li>Still routes all internet through VPN</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <h3>LAN-Only Mode (<code>AllowedIPs = 10.155.159.0/24, 192.168.1.0/24</code>)</h3>
+        <p>For users who only need access to home devices (not full internet through VPN), this mode keeps your regular internet connection local while tunneling only VPN and LAN traffic.</p>
+
+        <table class="table" style="margin-top:20px">
+          <thead>
+            <tr><th>Use Case</th><th>Recommended Mode</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Remote desktop + secure browsing on public Wi-Fi</td><td><strong>Full-tunnel</strong> (0.0.0.0/0, ::/0)</td></tr>
+            <tr><td>Access NAS/IoT with home IP visible</td><td><strong>Split-tunnel</strong> (0.0.0.0/0, ::/0, 192.168.1.0/24)</td></tr>
+            <tr><td>Mobile device with automatic routing</td><td><strong>Split-tunnel</strong> (works without explicit LAN)</td></tr>
+            <tr><td>Only need home LAN access, keep internet local</td><td><strong>LAN-only</strong> (10.155.159.0/24, 192.168.1.0/24)</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Section 13: Troubleshooting -->
+      <section id="troubleshoot" class="card">
+        <h2>Troubleshooting Decision Tree</h2>
+        <div class="svg-card">
+          <svg viewBox="0 0 1100 600" aria-label="Troubleshooting tree">
+            <defs>
+              <style>
+                .ts-box{fill:#0d0d0d;stroke:#00ff88;stroke-width:1.5}
+                .ts-text{fill:#e0e0e0;font:12px 'JetBrains Mono',monospace}
+                .ts-label{fill:#a0a0a0;font:10px 'JetBrains Mono',monospace}
+                .ts-arrow{stroke:#00d4ff;stroke-width:2;marker-end:url(#ts-arrow)}
+              </style>
+              <marker id="ts-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#00d4ff"/>
+              </marker>
+            </defs>
+
+            <rect x="50" y="30" width="280" height="70" rx="8" class="ts-box"/>
+            <text x="190" y="60" text-anchor="middle" class="ts-text">Connects but no LAN?</text>
+            <text x="190" y="80" text-anchor="middle" class="ts-label">Handshake OK, services unreachable</text>
+
+            <line x1="330" y1="65" x2="400" y2="65" class="ts-arrow"/>
+
+            <rect x="400" y="30" width="280" height="70" rx="8" class="ts-box"/>
+            <text x="540" y="55" text-anchor="middle" class="ts-text">Check server forwarding</text>
+            <text x="540" y="75" text-anchor="middle" class="ts-label">ip_forward=1 + NAT on wlan0</text>
+
+            <line x1="680" y1="65" x2="750" y2="65" class="ts-arrow"/>
+
+            <rect x="750" y="20" width="300" height="90" rx="8" class="ts-box"/>
+            <text x="900" y="50" text-anchor="middle" class="ts-text">Client routes include LAN?</text>
+            <text x="900" y="70" text-anchor="middle" class="ts-label">AllowedIPs = 0.0.0.0/0, ::/0,</text>
+            <text x="900" y="88" text-anchor="middle" class="ts-label">192.168.1.0/24</text>
+
+            <line x1="900" y1="110" x2="900" y2="170" class="ts-arrow"/>
+
+            <rect x="750" y="170" width="300" height="80" rx="8" class="ts-box"/>
+            <text x="900" y="205" text-anchor="middle" class="ts-text">Unique client IPs/keys?</text>
+            <text x="900" y="225" text-anchor="middle" class="ts-label">(10.155.159.2 vs .3 vs .4)</text>
+
+            <line x1="900" y1="250" x2="900" y2="310" class="ts-arrow"/>
+
+            <rect x="750" y="310" width="300" height="90" rx="8" class="ts-box"/>
+            <text x="900" y="345" text-anchor="middle" class="ts-text">Windows "General failure"?</text>
+            <text x="900" y="365" text-anchor="middle" class="ts-label">Add LAN to AllowedIPs</text>
+
+            <line x1="750" y1="355" x2="400" y2="355" class="ts-arrow"/>
+
+            <rect x="100" y="310" width="300" height="90" rx="8" class="ts-box"/>
+            <text x="250" y="345" text-anchor="middle" class="ts-text">Still blocked?</text>
+            <text x="250" y="365" text-anchor="middle" class="ts-label">Check Windows Firewall ICMP</text>
+            <text x="250" y="383" text-anchor="middle" class="ts-label">Verify iptables rules on Pi</text>
+          </svg>
+          <p class="caption">Follow checks left → right. Most issues stem from routing (AllowedIPs), forwarding (sysctl), or duplicate client IPs.</p>
+        </div>
+
+        <h3 style="margin-top:28px">Common Issues & Solutions</h3>
+        <table class="table">
+          <thead>
+            <tr><th>Symptom</th><th>Likely Cause</th><th>Fix</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>VPN connects but can't reach internet</td><td>NAT not configured</td><td>Check iptables MASQUERADE rule on <code>wlan0</code>/<code>eth0</code></td></tr>
+            <tr><td>Can reach VPN IP but not LAN devices</td><td>Missing LAN subnet in AllowedIPs</td><td>Add <code>192.168.1.0/24</code> to client config</td></tr>
+            <tr><td>Handshake never completes</td><td>Port forwarding issue</td><td>Verify router forwards UDP 51820 to Pi's IP</td></tr>
+            <tr><td>Ping shows "General failure" on Windows</td><td>Routing table conflict</td><td>Ensure client AllowedIPs includes LAN subnet</td></tr>
+            <tr><td>Client can't connect at all</td><td>Public IP changed</td><td>Update Endpoint in client config with current public IP</td></tr>
+            <tr><td>Connection drops after few minutes</td><td>NAT timeout</td><td>Add <code>PersistentKeepalive = 25</code> to client config</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Section 14: Operations & Tips -->
+      <section id="ops" class="card">
+        <h2>Operations & Day-2 Tips</h2>
+        <div class="grid2">
+          <div>
+            <h3>Common Management Commands</h3>
+            <pre><button class="copy">Copy</button><code>pivpn add                 # Add new client profile
+pivpn -qr                 # Show QR code for mobile
+pivpn list                # List all peers
+pivpn remove              # Revoke a client
+sudo wg                   # Show handshakes & traffic
+sudo wg show wg0 transfer # Per-peer data transfer
+sudo systemctl restart wg-quick@wg0
+sudo netfilter-persistent save</code></pre>
+          </div>
+          <div>
+            <h3>Security Hardening</h3>
+            <ul>
+              <li>Disable password SSH once key-based auth is configured</li>
+              <li>Only expose UDP 51820; never forward SSH/RDP to internet</li>
+              <li>Use <code>PersistentKeepalive = 25</code> for mobile clients behind NAT</li>
+              <li>Regularly update: <code>sudo apt update && sudo apt upgrade</code></li>
+              <li>Monitor logs: <code>sudo journalctl -u wg-quick@wg0 -f</code></li>
+              <li>Use <code>fail2ban</code> for additional SSH protection</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <h3>Performance Monitoring</h3>
+        <pre><button class="copy">Copy</button><code>sudo wg show wg0 transfer      # Check data transfer per peer
+sudo journalctl -u wg-quick@wg0 -f  # Live WireGuard logs
+htop                                # Monitor CPU/RAM usage
+vnstat -i wg0                       # Network statistics for wg0 interface</code></pre>
+      </section>
+
+      <!-- Glossary -->
+      <section class="card">
+        <h2>Glossary</h2>
+        <table class="table">
+          <thead>
+            <tr><th>Term</th><th>Definition</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>AllowedIPs</td><td>On client: which destinations route through the tunnel. On server: which IPs belong to each peer.</td></tr>
+            <tr><td>MASQUERADE</td><td>iptables NAT rule that rewrites source IP so LAN devices can reply to VPN clients.</td></tr>
+            <tr><td>Handshake</td><td>WireGuard key exchange event; must update periodically for a healthy tunnel (every 2 min by default).</td></tr>
+            <tr><td>wg0</td><td>The WireGuard network interface on your Pi (virtual tunnel adapter).</td></tr>
+            <tr><td>wlan0 / eth0</td><td>Physical network interface — wlan0 for Wi-Fi, eth0 for Ethernet.</td></tr>
+            <tr><td>PersistentKeepalive</td><td>Sends periodic packets to keep NAT mappings alive (essential for mobile clients).</td></tr>
+            <tr><td>Endpoint</td><td>The server's public IP:port that clients connect to.</td></tr>
+            <tr><td>PSK (PresharedKey)</td><td>Optional extra layer of symmetric encryption for quantum resistance.</td></tr>
+            <tr><td>ChaCha20-Poly1305</td><td>Modern authenticated encryption cipher used by WireGuard.</td></tr>
+            <tr><td>Curve25519</td><td>Elliptic curve used for key exchange in WireGuard.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Footer -->
+      <footer>
+        <div class="hr"></div>
+        <p>© OniisPi — remote-access VPN.</p>
+      </footer>
+    </main>
+  </div>
+</div>
+
+<!-- Back to Top Button -->
+<div class="back-to-top" id="backToTop" data-tooltip="Back to Top (T)">
+  <svg viewBox="0 0 24 24">
+    <path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/>
+  </svg>
+</div>
+
+<script>
+  // Create floating particles
+  function createParticles(){
+    const particleCount = 15;
+    for(let i = 0; i < particleCount; i++){
+      const particle = document.createElement('div');
+      particle.className = 'particle';
+      particle.style.left = Math.random() * 100 + '%';
+      particle.style.animationDelay = Math.random() * 20 + 's';
+      particle.style.animationDuration = (15 + Math.random() * 10) + 's';
+      document.body.appendChild(particle);
+    }
+  }
+  createParticles();
+
+  // Reading progress bar
+  const progressBar = document.getElementById('progressBar');
+  window.addEventListener('scroll', () => {
+    const windowHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+    const scrolled = (window.pageYOffset / windowHeight) * 100;
+    progressBar.style.width = scrolled + '%';
+  });
+
+  // Scroll indicator dots
+  const scrollIndicator = document.getElementById('scrollIndicator');
+  const sections = document.querySelectorAll('section[id]');
+
+  sections.forEach((section, index) => {
+    const dot = document.createElement('div');
+    dot.className = 'scroll-dot';
+    dot.addEventListener('click', () => {
+      section.scrollIntoView({behavior: 'smooth', block: 'start'});
+    });
+    scrollIndicator.appendChild(dot);
+  });
+
+  // Update active dot on scroll
+  function updateScrollIndicator(){
+    const scrollY = window.pageYOffset;
+    sections.forEach((section, index) => {
+      const sectionTop = section.offsetTop - 150;
+      const sectionHeight = section.offsetHeight;
+      const dot = scrollIndicator.children[index];
+
+      if(scrollY >= sectionTop && scrollY < sectionTop + sectionHeight){
+        dot.classList.add('active');
+      } else {
+        dot.classList.remove('active');
+      }
+    });
+
+    // Show/hide scroll indicator
+    if(scrollY > 500){
+      scrollIndicator.classList.add('visible');
+    } else {
+      scrollIndicator.classList.remove('visible');
+    }
+  }
+
+  window.addEventListener('scroll', updateScrollIndicator);
+  updateScrollIndicator();
+</script>
+
+<script>
+  // TOC Toggle functionality
+  const tocToggle = document.querySelector('.toc-toggle');
+  const toc = document.querySelector('.toc');
+
+  if(tocToggle){
+    // Check if there's a saved state in localStorage
+    const isCollapsed = localStorage.getItem('tocCollapsed') === 'true';
+    if(isCollapsed){
+      toc.classList.add('collapsed');
+    }
+
+    tocToggle.addEventListener('click', () => {
+      toc.classList.toggle('collapsed');
+      // Save the state
+      localStorage.setItem('tocCollapsed', toc.classList.contains('collapsed'));
+    });
+
+    // Auto-collapse TOC on mobile after clicking a link
+    const tocLinks = document.querySelectorAll('.toc-content a');
+    tocLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        if(window.innerWidth <= 1024){
+          setTimeout(() => {
+            toc.classList.add('collapsed');
+            localStorage.setItem('tocCollapsed', 'true');
+          }, 300);
+        }
+      });
+    });
+  }
+</script>
+
+<script>
+  // Copy-to-clipboard functionality
+  document.querySelectorAll('pre').forEach((pre)=>{
+    const btn = pre.querySelector('.copy');
+    if(!btn) return;
+    btn.addEventListener('click',()=>{
+      // Get only the code element's text, not the button
+      const codeElement = pre.querySelector('code');
+      const code = codeElement ? codeElement.textContent : pre.textContent.replace('Copy', '').trim();
+      navigator.clipboard.writeText(code).then(()=>{
+        btn.textContent='✓ Copied';
+        setTimeout(()=>btn.textContent='Copy',2000);
+      }).catch(()=>{
+        btn.textContent='✗ Failed';
+        setTimeout(()=>btn.textContent='Copy',2000);
+      });
+    });
+  });
+
+  // Smooth scroll for anchor links
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+      e.preventDefault();
+      const target = document.querySelector(this.getAttribute('href'));
+      if(target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  // Add active state to TOC links on scroll
+  const backToTopBtn = document.getElementById('backToTop');
+
+  window.addEventListener('scroll', () => {
+    const sections = document.querySelectorAll('section[id]');
+    const scrollY = window.pageYOffset;
+
+    // Back to top button visibility
+    if(scrollY > 300){
+      backToTopBtn.classList.add('visible');
+    } else {
+      backToTopBtn.classList.remove('visible');
+    }
+
+    // Active TOC link
+    sections.forEach(current => {
+      const sectionHeight = current.offsetHeight;
+      const sectionTop = current.offsetTop - 100;
+      const sectionId = current.getAttribute('id');
+
+      if (scrollY > sectionTop && scrollY <= sectionTop + sectionHeight) {
+        document.querySelectorAll('.toc a').forEach(link => {
+          link.style.borderLeftColor = 'transparent';
+          link.style.color = 'var(--text-secondary)';
+        });
+        const activeLink = document.querySelector(`.toc a[href="#${sectionId}"]`);
+        if(activeLink) {
+          activeLink.style.borderLeftColor = 'var(--accent)';
+          activeLink.style.color = 'var(--accent)';
+        }
+      }
+    });
+  });
+
+  // Back to top functionality
+  backToTopBtn.addEventListener('click', () => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  });
+
+  // Add loading animation to cards
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if(entry.isIntersecting){
+        entry.target.style.animationPlayState = 'running';
+        observer.unobserve(entry.target);
+      }
+    });
+  }, {threshold: 0.1});
+
+  document.querySelectorAll('.card').forEach(card => {
+    observer.observe(card);
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Press 'T' to scroll to top
+    if(e.key === 't' || e.key === 'T'){
+      window.scrollTo({top: 0, behavior: 'smooth'});
+    }
+    // Press '?' to show keyboard shortcuts (you can expand this)
+    if(e.key === '?'){
+      console.log('Keyboard shortcuts:\nT - Scroll to top\n? - Show this help');
+    }
+  });
+</script>
+</body>
+</html>
